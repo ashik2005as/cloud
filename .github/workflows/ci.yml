@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Download modules
+        run: go mod download
+      - name: gofmt check
+        run: test -z "$(gofmt -l .)"
+      - name: go vet
+        run: go vet ./...
+      - name: unit tests
+        run: go test ./...
+      - name: go build
+        run: go build ./...
+      - name: Docker build user-service
+        run: docker build -f cmd/user-service/Dockerfile -t cloud-user-service:ci .
+      - name: Docker build auction-service
+        run: docker build -f cmd/auction-service/Dockerfile -t cloud-auction-service:ci .
+      - name: Docker build bid-service
+        run: docker build -f cmd/bid-service/Dockerfile -t cloud-bid-service:ci .
+
+  publish-ghcr:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to GHCR
+        if: ${{ secrets.GITHUB_TOKEN != '' }}
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Build and push (optional)
+        if: ${{ secrets.GITHUB_TOKEN != '' }}
+        run: |
+          docker build -f cmd/user-service/Dockerfile -t ghcr.io/${{ github.repository_owner }}/cloud-user-service:latest .
+          docker build -f cmd/auction-service/Dockerfile -t ghcr.io/${{ github.repository_owner }}/cloud-auction-service:latest .
+          docker build -f cmd/bid-service/Dockerfile -t ghcr.io/${{ github.repository_owner }}/cloud-bid-service:latest .
+          docker push ghcr.io/${{ github.repository_owner }}/cloud-user-service:latest
+          docker push ghcr.io/${{ github.repository_owner }}/cloud-auction-service:latest
+          docker push ghcr.io/${{ github.repository_owner }}/cloud-bid-service:latest

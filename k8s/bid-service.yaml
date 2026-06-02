@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bid-service
+  namespace: cloud-auction
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bid-service
+  template:
+    metadata:
+      labels:
+        app: bid-service
+    spec:
+      containers:
+        - name: bid-service
+          image: ghcr.io/ashik2005as/cloud-bid-service:latest
+          ports:
+            - containerPort: 8082
+          env:
+            - name: PORT
+              value: "8082"
+            - name: REDIS_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: cloud-config
+                  key: REDIS_ADDR
+            - name: AUCTION_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: cloud-config
+                  key: AUCTION_SERVICE_URL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cloud-secrets
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cloud-secrets
+                  key: JWT_SECRET
+            - name: INTERNAL_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloud-secrets
+                  key: INTERNAL_SERVICE_TOKEN
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8082
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8082
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bid-service
+  namespace: cloud-auction
+spec:
+  selector:
+    app: bid-service
+  ports:
+    - port: 8082
+      targetPort: 8082
